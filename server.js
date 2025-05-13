@@ -4,9 +4,12 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
     cors: {
         origin: ["https://thanhtin5520.github.io", "http://localhost:3000"],
-        methods: ["GET", "POST"],
-        credentials: true
-    }
+        methods: ["GET", "POST", "OPTIONS"],
+        credentials: true,
+        allowedHeaders: ["Content-Type", "Authorization"]
+    },
+    path: '/socket.io/',
+    transports: ['websocket', 'polling']
 });
 const QRCode = require('qrcode');
 const localDevices = require('local-devices');
@@ -29,7 +32,7 @@ io.on('connection', (socket) => {
     
     // Create QR code with the server URL
     const serverUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html'
+        ? 'https://quet-qr-code-lan.vercel.app/client.html'
         : 'http://localhost:3000/client.html';
     QRCode.toDataURL(serverUrl, {
         errorCorrectionLevel: 'H',

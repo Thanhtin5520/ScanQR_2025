@@ -88,7 +88,7 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
         // Khởi tạo Socket.io với URL của server LAN
-        const socket = io('https://quet-qr-code-lan.vercel.app');
+        const socket = io('http://192.168.1.103:3000');
 
         const connectionStatus = document.getElementById('connectionStatus');
         const connectionOptions = document.getElementById('connectionOptions');
