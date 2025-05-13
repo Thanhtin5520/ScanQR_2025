@@ -9,8 +9,13 @@ const io = require('socket.io')(http, {
         allowedHeaders: ["Content-Type", "Authorization"]
     },
     path: '/socket.io/',
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    maxHttpBufferSize: 1e8,
+    cookie: false
 });
 const QRCode = require('qrcode');
 const localDevices = require('local-devices');
@@ -21,6 +26,9 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.header('Access-Control-Allow-Credentials', 'true');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
     next();
 });
 

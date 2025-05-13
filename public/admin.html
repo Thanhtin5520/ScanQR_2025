@@ -165,15 +165,22 @@
     <script>
         // Khởi tạo Socket.io với URL của server Vercel
         console.log('Initializing Socket.IO connection...');
+        
+        // Tắt auto connect
         const socket = io('https://quet-qr-code-lan.vercel.app', {
-            withCredentials: true,
-            transports: ['websocket', 'polling'],
-            path: '/socket.io/',
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            rememberUpgrade: true,
             reconnection: true,
             reconnectionAttempts: 5,
-            forceNew: true,
-            autoConnect: true
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            autoConnect: false
         });
+
+        // Kết nối thủ công
+        socket.connect();
 
         // Log để debug
         console.log('Connecting to:', 'https://quet-qr-code-lan.vercel.app');
@@ -188,7 +195,7 @@
 
         // Xử lý kết nối
         socket.on('connect', () => {
-            console.log('Connected to server successfully');
+            console.log('Connected to server');
             socket.emit('device-info', {
                 userAgent: navigator.userAgent,
                 platform: navigator.platform
@@ -197,12 +204,11 @@
 
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
-            qrcodeElement.innerHTML = `
-                <div class="alert alert-danger">
-                    Không thể kết nối đến server. Vui lòng thử lại sau.
-                    <br>Chi tiết lỗi: ${error.message}
-                </div>
-            `;
+            // Thử kết nối lại sau 5 giây
+            setTimeout(() => {
+                console.log('Attempting to reconnect...');
+                socket.connect();
+            }, 5000);
         });
 
         // Hiển thị QR code
