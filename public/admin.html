@@ -169,7 +169,8 @@
             transports: ['websocket', 'polling'],
             path: '/socket.io/',
             reconnection: true,
-            reconnectionAttempts: 5
+            reconnectionAttempts: 5,
+            forceNew: true
         });
 
         // Các phần tử DOM
