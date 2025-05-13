@@ -28,7 +28,9 @@ io.on('connection', (socket) => {
     console.log('Client connected');
     
     // Create QR code with the server URL
-    const serverUrl = `https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html`;
+    const serverUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html'
+        : 'http://localhost:3000/client.html';
     QRCode.toDataURL(serverUrl, {
         errorCorrectionLevel: 'H',
         margin: 1,
