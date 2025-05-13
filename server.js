@@ -11,28 +11,33 @@ const io = require('socket.io')(http, {
 const QRCode = require('qrcode');
 const localDevices = require('local-devices');
 
-// Phục vụ các file tĩnh từ thư mục public
+// Serve static files from the public directory
 app.use(express.static('public'));
 
-// Lưu trữ thông tin kết nối
+// Store connection information
 const connectedDevices = new Map();
 const pendingConnections = new Map();
 
-// Tạo QR code khi có kết nối mới
+// Root route
+app.get('/', (req, res) => {
+    res.send('QR Code Scanner Server is running');
+});
+
+// Create QR code when a new connection occurs
 io.on('connection', (socket) => {
-    console.log('Client đã kết nối');
+    console.log('Client connected');
     
-    // Tạo QR code với URL của server
+    // Create QR code with the server URL
     const serverUrl = `https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html`;
     QRCode.toDataURL(serverUrl, (err, url) => {
         if (err) {
-            console.error('Lỗi khi tạo QR code:', err);
+            console.error('Error creating QR code:', err);
             return;
         }
         socket.emit('connection-qrcode', url);
     });
 
-    // Xử lý thông tin thiết bị
+    // Handle device information
     socket.on('device-info', (info) => {
         const deviceId = socket.id;
         pendingConnections.set(deviceId, {
@@ -41,7 +46,7 @@ io.on('connection', (socket) => {
             ip: socket.handshake.address
         });
         
-        // Thông báo cho admin có thiết bị mới
+        // Notify admin of new device
         io.emit('new-device', {
             id: deviceId,
             ip: socket.handshake.address,
@@ -49,12 +54,12 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Xử lý yêu cầu kết nối tự động
+    // Handle automatic connection requests
     socket.on('request-connection', () => {
         const deviceId = socket.id;
         const device = pendingConnections.get(deviceId);
         if (device) {
-            // Thông báo cho admin có yêu cầu kết nối
+            // Notify admin of connection request
             io.emit('connection-request', {
                 id: deviceId,
                 ip: device.ip,
@@ -63,12 +68,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Xử lý kết nối qua QR code
+    // Handle QR code connection
     socket.on('qr-connection', (qrData) => {
         const deviceId = socket.id;
         const device = pendingConnections.get(deviceId);
         if (device) {
-            // Thông báo cho admin có yêu cầu kết nối qua QR
+            // Notify admin of QR connection request
             io.emit('qr-connection-request', {
                 id: deviceId,
                 ip: device.ip,
@@ -78,44 +83,22 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Xử lý sự kiện quét mạng
-    socket.on('scan-network', async () => {
-        try {
-            // Quét tất cả các thiết bị trong mạng
-            const devices = await localDevices();
-            
-            // Chuyển đổi dữ liệu thiết bị thành định dạng mong muốn
-            const formattedDevices = devices.map(device => ({
-                ip: device.ip,
-                mac: device.mac || 'Không xác định',
-                hostname: device.name || 'Không xác định',
-                status: connectedDevices.has(device.ip) ? 'Connected' : 'Disconnected'
-            }));
-
-            socket.emit('network-devices', formattedDevices);
-        } catch (error) {
-            console.error('Lỗi khi quét mạng:', error);
-            socket.emit('network-devices', []);
-        }
-    });
-
-    // Xử lý dữ liệu barcode từ client
+    // Handle barcode data
     socket.on('barcode-data', (data) => {
-        console.log('Nhận barcode:', data);
         io.emit('barcode-data', data);
     });
 
-    // Xử lý khi admin chấp nhận kết nối
+    // Handle connection approval
     socket.on('approve-connection', (deviceId) => {
         const device = pendingConnections.get(deviceId);
         if (device) {
-            connectedDevices.set(device.ip, device);
-            device.socket.emit('connection-approved');
+            connectedDevices.set(deviceId, device);
             pendingConnections.delete(deviceId);
+            device.socket.emit('connection-approved');
         }
     });
 
-    // Xử lý khi admin từ chối kết nối
+    // Handle connection rejection
     socket.on('reject-connection', (deviceId) => {
         const device = pendingConnections.get(deviceId);
         if (device) {
@@ -124,22 +107,30 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Xử lý ngắt kết nối
-    socket.on('disconnect', () => {
-        const deviceId = socket.id;
-        const device = pendingConnections.get(deviceId);
-        if (device) {
-            pendingConnections.delete(deviceId);
-            connectedDevices.delete(device.ip);
+    // Handle network scan request
+    socket.on('scan-network', async () => {
+        try {
+            const devices = await localDevices();
+            io.emit('network-devices', devices);
+        } catch (error) {
+            console.error('Error scanning network:', error);
+            io.emit('scan-error', 'Failed to scan network');
         }
+    });
+
+    // Handle disconnection
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+        connectedDevices.delete(socket.id);
+        pendingConnections.delete(socket.id);
     });
 });
 
-// Khởi động server
+// Start server
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`Server đang chạy tại port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
 
-// Export app cho Vercel
+// Export for Vercel
 module.exports = app; 
