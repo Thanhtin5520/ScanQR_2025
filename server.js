@@ -1,7 +1,13 @@
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const io = require('socket.io')(http, {
+    cors: {
+        origin: ["https://thanhtin5520.github.io", "http://localhost:3000"],
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
 const QRCode = require('qrcode');
 const localDevices = require('local-devices');
 
@@ -17,7 +23,7 @@ io.on('connection', (socket) => {
     console.log('Client đã kết nối');
     
     // Tạo QR code với URL của server
-    const serverUrl = `http://${socket.handshake.headers.host}`;
+    const serverUrl = `https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html`;
     QRCode.toDataURL(serverUrl, (err, url) => {
         if (err) {
             console.error('Lỗi khi tạo QR code:', err);
@@ -132,5 +138,8 @@ io.on('connection', (socket) => {
 // Khởi động server
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
-}); 
+    console.log(`Server đang chạy tại port ${PORT}`);
+});
+
+// Export app cho Vercel
+module.exports = app; 

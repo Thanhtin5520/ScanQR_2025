@@ -106,7 +106,12 @@
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
-        const socket = io();
+        // Khởi tạo Socket.io với URL của server Vercel
+        const socket = io('https://quet-qr-code-lan.vercel.app', {
+            withCredentials: true,
+            transports: ['websocket']
+        });
+
         const barcodeInput = document.getElementById('barcodeInput');
         const sendBtn = document.getElementById('sendBtn');
         const connectionStatus = document.getElementById('connectionStatus');

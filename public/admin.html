@@ -163,8 +163,11 @@
 
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
-        // Khởi tạo Socket.io
-        const socket = io();
+        // Khởi tạo Socket.io với URL của server Vercel
+        const socket = io('https://quet-qr-code-lan.vercel.app', {
+            withCredentials: true,
+            transports: ['websocket']
+        });
 
         // Các phần tử DOM
         const qrcodeElement = document.getElementById('qrcode');
