@@ -29,11 +29,17 @@ io.on('connection', (socket) => {
     
     // Create QR code with the server URL
     const serverUrl = `https://thanhtin5520.github.io/QuetQrCodeLan/public/client.html`;
-    QRCode.toDataURL(serverUrl, (err, url) => {
+    QRCode.toDataURL(serverUrl, {
+        errorCorrectionLevel: 'H',
+        margin: 1,
+        width: 300
+    }, (err, url) => {
         if (err) {
             console.error('Error creating QR code:', err);
+            socket.emit('qr-error', 'Failed to generate QR code');
             return;
         }
+        console.log('QR Code generated successfully');
         socket.emit('connection-qrcode', url);
     });
 

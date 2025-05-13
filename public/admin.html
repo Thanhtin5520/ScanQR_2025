@@ -179,7 +179,18 @@
 
         // Hiển thị QR code
         socket.on('connection-qrcode', (qrImageUrl) => {
-            qrcodeElement.innerHTML = `<img src="${qrImageUrl}" alt="QR Code kết nối">`;
+            console.log('Received QR code');
+            qrcodeElement.innerHTML = `<img src="${qrImageUrl}" alt="QR Code kết nối" style="max-width: 300px;">`;
+        });
+
+        // Xử lý lỗi QR code
+        socket.on('qr-error', (error) => {
+            console.error('QR Code error:', error);
+            qrcodeElement.innerHTML = `
+                <div class="alert alert-danger">
+                    Không thể tạo mã QR. Vui lòng thử lại sau.
+                </div>
+            `;
         });
 
         // Xử lý thiết bị mới
@@ -191,6 +202,7 @@
         socket.on('connection-request', (device) => {
             const requestElement = document.createElement('div');
             requestElement.className = 'connection-request';
+            requestElement.setAttribute('data-device-id', device.id);
             requestElement.innerHTML = `
                 <h6>Yêu cầu kết nối từ thiết bị mới</h6>
                 <p>IP: ${device.ip}</p>
@@ -211,6 +223,7 @@
         socket.on('qr-connection-request', (device) => {
             const requestElement = document.createElement('div');
             requestElement.className = 'connection-request';
+            requestElement.setAttribute('data-device-id', device.id);
             requestElement.innerHTML = `
                 <h6>Yêu cầu kết nối qua QR từ thiết bị mới</h6>
                 <p>IP: ${device.ip}</p>
@@ -263,13 +276,25 @@
                 const row = `
                     <tr>
                         <td>${device.ip}</td>
-                        <td>${device.mac}</td>
+                        <td>${device.mac || 'Không xác định'}</td>
                         <td>${hostname}</td>
                         <td><span class="status-badge ${statusClass}">${device.status}</span></td>
                     </tr>
                 `;
                 deviceList.innerHTML += row;
             });
+        });
+
+        // Xử lý lỗi quét mạng
+        socket.on('scan-error', (error) => {
+            console.error('Scan error:', error);
+            deviceList.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center text-danger">
+                        Lỗi khi quét mạng: ${error}
+                    </td>
+                </tr>
+            `;
         });
 
         // Khi có client kết nối
@@ -309,6 +334,20 @@
         // Đặt focus vào barcodeInput khi click vào ô
         barcodeInput.addEventListener('click', () => {
             barcodeInput.focus();
+        });
+
+        // Xử lý kết nối Socket.IO
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            qrcodeElement.innerHTML = `
+                <div class="alert alert-danger">
+                    Không thể kết nối đến server. Vui lòng thử lại sau.
+                </div>
+            `;
         });
     </script>
 </body>

@@ -124,6 +124,7 @@
 
         // Xử lý kết nối
         socket.on('connect', () => {
+            console.log('Connected to server');
             // Gửi thông tin thiết bị khi kết nối
             socket.emit('device-info', {
                 userAgent: navigator.userAgent,
@@ -131,11 +132,24 @@
             });
         });
 
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            connectionStatus.textContent = 'Lỗi kết nối đến server';
+            connectionStatus.className = 'status disconnected';
+        });
+
         socket.on('connection-approved', () => {
             connectionStatus.textContent = 'Đã kết nối';
             connectionStatus.className = 'status connected';
             connectionOptions.style.display = 'none';
             scannerCard.style.display = 'block';
+        });
+
+        socket.on('connection-rejected', () => {
+            connectionStatus.textContent = 'Kết nối bị từ chối';
+            connectionStatus.className = 'status disconnected';
+            connectionOptions.style.display = 'flex';
+            scannerCard.style.display = 'none';
         });
 
         socket.on('disconnect', () => {
@@ -147,6 +161,8 @@
 
         // Xử lý kết nối tự động
         autoConnectBtn.addEventListener('click', () => {
+            connectionStatus.textContent = 'Đang kết nối...';
+            connectionStatus.className = 'status disconnected';
             socket.emit('request-connection');
         });
 
