@@ -166,7 +166,8 @@
         // Khởi tạo Socket.io với URL của server LAN
         const socket = io('https://quet-qr-code-lan.vercel.app', {
             withCredentials: true,
-            transports: ['websocket', 'polling']
+            transports: ['websocket', 'polling'],
+            path: '/socket.io/'
         });
 
         // Các phần tử DOM
