@@ -11,10 +11,10 @@
             "src": "/socket.io/(.*)",
             "dest": "server.js",
             "headers": {
-                "Access-Control-Allow-Origin": "https://thanhtin5520.github.io",
+                "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Credentials": "true",
                 "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
             }
         },
         {
@@ -22,8 +22,8 @@
             "dest": "server.js",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "headers": {
-                "Access-Control-Allow-Origin": "https://thanhtin5520.github.io",
-                "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization",
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
                 "Access-Control-Allow-Credentials": "true"
             }
