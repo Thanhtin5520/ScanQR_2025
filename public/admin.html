@@ -170,8 +170,12 @@
             path: '/socket.io/',
             reconnection: true,
             reconnectionAttempts: 5,
-            forceNew: true
+            forceNew: true,
+            autoConnect: true
         });
+
+        // Log để debug
+        console.log('Connecting to:', 'https://quet-qr-code-lan.vercel.app');
 
         // Các phần tử DOM
         const qrcodeElement = document.getElementById('qrcode');

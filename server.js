@@ -9,10 +9,20 @@ const io = require('socket.io')(http, {
         allowedHeaders: ["Content-Type", "Authorization"]
     },
     path: '/socket.io/',
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
 });
 const QRCode = require('qrcode');
 const localDevices = require('local-devices');
+
+// Thêm middleware CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    next();
+});
 
 // Serve static files from the public directory
 app.use(express.static('public'));
