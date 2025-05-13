@@ -164,7 +164,7 @@
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
         // Khởi tạo Socket.io với URL của server LAN
-        const socket = io('http://192.168.1.103:3000', {
+        const socket = io('https://quet-qr-code-lan.vercel.app', {
             withCredentials: true,
             transports: ['websocket', 'polling']
         });
