@@ -163,11 +163,11 @@
 
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
-        // Khởi tạo Socket.io với URL của server Vercel
+        // Khởi tạo Socket.io với URL của server Railway
         console.log('Initializing Socket.IO connection...');
         
         // Tắt auto connect
-        const socket = io('https://quet-qr-code-lan.vercel.app', {
+        const socket = io('https://quetqrcodelan-production.up.railway.app', {
             transports: ['polling'],
             reconnection: true,
             reconnectionAttempts: 5,
@@ -181,7 +181,7 @@
         socket.connect();
 
         // Log để debug
-        console.log('Connecting to:', 'https://quet-qr-code-lan.vercel.app');
+        console.log('Connecting to:', 'https://quetqrcodelan-production.up.railway.app');
 
         // Các phần tử DOM
         const qrcodeElement = document.getElementById('qrcode');
@@ -202,7 +202,6 @@
 
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
-            // Thử kết nối lại sau 5 giây
             setTimeout(() => {
                 console.log('Attempting to reconnect...');
                 socket.connect();
