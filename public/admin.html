@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - QR Code Scanner</title>
+    <title>Admin2 - QR Code Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" 
           rel="stylesheet">
     <style>
@@ -163,10 +163,10 @@
 
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
-        // Khởi tạo Socket.io với URL của server Vercel
-        const socket = io('https://quet-qr-code-lan.vercel.app', {
+        // Khởi tạo Socket.io với URL của server LAN
+        const socket = io('http://192.168.1.103:3000', {
             withCredentials: true,
-            transports: ['websocket']
+            transports: ['websocket', 'polling']
         });
 
         // Các phần tử DOM
@@ -306,23 +306,8 @@
         socket.on('barcode-data', (barcodeData) => {
             barcodeInput.value = barcodeData;
             barcodeResult.textContent = `Đã nhận: ${barcodeData}`;
-            
-            // Tự động kích hoạt trường nhập liệu và gửi dữ liệu như một sự kiện nhập liệu
-            barcodeInput.focus();
-            
-            // Tạo sự kiện nhập cho trường
-            const event = new Event('input', { bubbles: true });
-            barcodeInput.dispatchEvent(event);
-            
-            // Tùy chọn: Mô phỏng nhấn phím Enter
-            const keyEvent = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                code: 'Enter',
-                keyCode: 13,
-                which: 13,
-                bubbles: true
-            });
-            barcodeInput.dispatchEvent(keyEvent);
+            // Mở tab mới tìm kiếm Google với nội dung QR code
+            window.open('https://www.google.com/search?q=' + encodeURIComponent(barcodeData), '_blank');
         });
 
         // Quét thiết bị khi nhấn nút
