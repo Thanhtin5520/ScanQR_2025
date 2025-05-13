@@ -168,9 +168,7 @@
         
         // Tắt auto connect
         const socket = io('https://quet-qr-code-lan.vercel.app', {
-            transports: ['polling', 'websocket'],
-            upgrade: true,
-            rememberUpgrade: true,
+            transports: ['polling'],
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
