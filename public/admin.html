@@ -164,6 +164,7 @@
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
         // Khởi tạo Socket.io với URL của server Vercel
+        console.log('Initializing Socket.IO connection...');
         const socket = io('https://quet-qr-code-lan.vercel.app', {
             withCredentials: true,
             transports: ['websocket', 'polling'],
@@ -185,9 +186,28 @@
         const scanBtn = document.getElementById('scanBtn');
         const pendingDevices = document.getElementById('pendingDevices');
 
+        // Xử lý kết nối
+        socket.on('connect', () => {
+            console.log('Connected to server successfully');
+            socket.emit('device-info', {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform
+            });
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            qrcodeElement.innerHTML = `
+                <div class="alert alert-danger">
+                    Không thể kết nối đến server. Vui lòng thử lại sau.
+                    <br>Chi tiết lỗi: ${error.message}
+                </div>
+            `;
+        });
+
         // Hiển thị QR code
         socket.on('connection-qrcode', (qrImageUrl) => {
-            console.log('Received QR code');
+            console.log('Received QR code successfully');
             qrcodeElement.innerHTML = `<img src="${qrImageUrl}" alt="QR Code kết nối" style="max-width: 300px;">`;
         });
 
@@ -197,6 +217,7 @@
             qrcodeElement.innerHTML = `
                 <div class="alert alert-danger">
                     Không thể tạo mã QR. Vui lòng thử lại sau.
+                    <br>Chi tiết lỗi: ${error}
                 </div>
             `;
         });
@@ -327,20 +348,6 @@
         // Đặt focus vào barcodeInput khi click vào ô
         barcodeInput.addEventListener('click', () => {
             barcodeInput.focus();
-        });
-
-        // Xử lý kết nối Socket.IO
-        socket.on('connect', () => {
-            console.log('Connected to server');
-        });
-
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error);
-            qrcodeElement.innerHTML = `
-                <div class="alert alert-danger">
-                    Không thể kết nối đến server. Vui lòng thử lại sau.
-                </div>
-            `;
         });
     </script>
 </body>
