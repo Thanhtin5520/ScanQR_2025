@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin23 - QR Code Scanner</title>
+    <title>Admin232 - QR Code Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" 
           rel="stylesheet">
     <style>
@@ -91,6 +91,70 @@
             background-color: #e9ecef;
             border-radius: 5px;
         }
+        .scan-session {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .scan-session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .scan-session-title {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .scan-session-info {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .scan-session-data {
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .scan-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .scan-item:last-child {
+            border-bottom: none;
+        }
+        .export-btn {
+            margin-left: 10px;
+        }
+        .connected-devices {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .device-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .device-info {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -131,29 +195,20 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">Danh sách thiết bị mạng</h5>
+                        <h5 class="mb-0">Danh sách phiên quét</h5>
                     </div>
                     <div class="card-body">
-                        <button id="scanBtn" class="btn btn-primary mb-3">Quét thiết bị</button>
+                        <div class="connected-devices">
+                            <h6 class="mb-3">Thiết bị đang kết nối</h6>
+                            <div id="connectedDevicesList">
+                                <!-- Danh sách thiết bị đang kết nối -->
+                            </div>
+                        </div>
                         <div class="pending-devices" id="pendingDevices">
                             <!-- Các yêu cầu kết nối sẽ hiển thị ở đây -->
                         </div>
-                        <div class="table-responsive device-table">
-                            <table class="table table-striped" id="deviceTable">
-                                <thead>
-                                    <tr>
-                                        <th>Địa chỉ IP</th>
-                                        <th>Địa chỉ MAC</th>
-                                        <th>Tên thiết bị</th>
-                                        <th>Trạng thái</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="deviceList">
-                                    <tr>
-                                        <td colspan="4" class="text-center">Đang tải...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div id="scanSessions">
+                            <!-- Các phiên quét sẽ hiển thị ở đây -->
                         </div>
                     </div>
                 </div>
@@ -162,13 +217,26 @@
     </div>
 
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Khởi tạo Socket.io với URL của server Railway
+        // Lưu trữ danh sách thiết bị đang kết nối
+        const connectedDevices = new Map();
+        const pendingConnections = new Map();
+
+        // Khởi tạo Socket.io với URL của server
         console.log('Initializing Socket.IO connection...');
         
+        // Xác định URL server dựa trên môi trường (local/production)
+        const serverUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? `http://${window.location.hostname}:3000` 
+            : 'https://quetqrcodelan-production.up.railway.app';
+            
+        console.log('Server URL:', serverUrl);
+        
         // Tắt auto connect
-        const socket = io('https://quetqrcodelan-production.up.railway.app', {
-            transports: ['polling'],
+        const socket = io(serverUrl, {
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
@@ -181,7 +249,7 @@
         socket.connect();
 
         // Log để debug
-        console.log('Connecting to:', 'https://quetqrcodelan-production.up.railway.app');
+        console.log('Connecting to:', serverUrl);
 
         // Các phần tử DOM
         const qrcodeElement = document.getElementById('qrcode');
@@ -190,6 +258,7 @@
         const barcodeResult = document.getElementById('barcodeResult');
         const scanBtn = document.getElementById('scanBtn');
         const pendingDevices = document.getElementById('pendingDevices');
+        const connectedDevicesList = document.getElementById('connectedDevicesList');
 
         // Xử lý kết nối
         socket.on('connect', () => {
@@ -232,6 +301,15 @@
 
         // Xử lý yêu cầu kết nối
         socket.on('connection-request', (device) => {
+            console.log('Yêu cầu kết nối từ thiết bị:', device);
+            
+            // Kiểm tra xem yêu cầu kết nối này đã tồn tại chưa
+            const existingRequest = document.querySelector(`[data-device-id="${device.id}"]`);
+            if (existingRequest) {
+                console.log('Yêu cầu kết nối đã tồn tại cho thiết bị:', device.id);
+                return;
+            }
+            
             const requestElement = document.createElement('div');
             requestElement.className = 'connection-request';
             requestElement.setAttribute('data-device-id', device.id);
@@ -253,6 +331,15 @@
 
         // Xử lý yêu cầu kết nối qua QR
         socket.on('qr-connection-request', (device) => {
+            console.log('Yêu cầu kết nối QR từ thiết bị:', device);
+            
+            // Kiểm tra xem yêu cầu kết nối này đã tồn tại chưa
+            const existingRequest = document.querySelector(`[data-device-id="${device.id}"]`);
+            if (existingRequest) {
+                console.log('Yêu cầu kết nối QR đã tồn tại cho thiết bị:', device.id);
+                return;
+            }
+            
             const requestElement = document.createElement('div');
             requestElement.className = 'connection-request';
             requestElement.setAttribute('data-device-id', device.id);
@@ -272,10 +359,114 @@
             pendingDevices.appendChild(requestElement);
         });
 
-        // Hàm chấp nhận kết nối
+        // Xử lý thiết bị kết nối
+        socket.on('client-connected', (device) => {
+            console.log('Thiết bị kết nối:', device);
+            
+            // Đảm bảo thiết bị có thông tin hợp lệ
+            if (!device || !device.id) {
+                console.error('Dữ liệu thiết bị không hợp lệ:', device);
+                return;
+            }
+            
+            // Lưu thông tin thiết bị vào Map
+            connectedDevices.set(device.id, {
+                ...device,
+                status: 'online',
+                lastSeen: device.lastSeen || new Date().toISOString()
+            });
+            
+            // Cập nhật giao diện
+            updateConnectedDevicesDisplay();
+            
+            // Xóa yêu cầu kết nối nếu có
+            const requestElement = document.querySelector(`[data-device-id="${device.id}"]`);
+            if (requestElement) {
+                requestElement.remove();
+            }
+        });
+
+        // Xử lý thiết bị ngắt kết nối
+        socket.on('client-disconnected', (deviceId) => {
+            console.log('Thiết bị ngắt kết nối:', deviceId);
+            if (connectedDevices.has(deviceId)) {
+                const device = connectedDevices.get(deviceId);
+                device.status = 'offline';
+                device.lastSeen = new Date().toISOString();
+                updateConnectedDevicesDisplay();
+            }
+        });
+
+        // Nhận danh sách thiết bị đang kết nối khi vừa kết nối tới server
+        socket.on('connected-devices-list', (devicesList) => {
+            console.log('Nhận danh sách thiết bị kết nối:', devicesList);
+            
+            // Xóa danh sách hiện tại và thêm thiết bị từ server
+            connectedDevices.clear();
+            
+            if (Array.isArray(devicesList)) {
+                devicesList.forEach(device => {
+                    if (device && device.id) {
+                        connectedDevices.set(device.id, device);
+                    }
+                });
+            }
+            
+            // Cập nhật giao diện
+            updateConnectedDevicesDisplay();
+        });
+
+        // Cập nhật hiển thị thiết bị đang kết nối
+        function updateConnectedDevicesDisplay() {
+            console.log('Cập nhật hiển thị thiết bị, số lượng:', connectedDevices.size);
+            
+            const connectedDevicesList = document.getElementById('connectedDevicesList');
+            if (!connectedDevicesList) {
+                console.error('Không tìm thấy phần tử connectedDevicesList');
+                return;
+            }
+            
+            connectedDevicesList.innerHTML = '';
+
+            if (connectedDevices.size === 0) {
+                connectedDevicesList.innerHTML = '<p class="text-muted">Không có thiết bị nào đang kết nối</p>';
+                return;
+            }
+
+            connectedDevices.forEach((device, deviceId) => {
+                console.log('Hiển thị thiết bị:', deviceId, device);
+                
+                const deviceElement = document.createElement('div');
+                deviceElement.className = 'mb-3 p-2 border-bottom';
+                
+                // Đảm bảo thông tin thiết bị tồn tại
+                const deviceInfo = device.info || { platform: 'Không xác định', userAgent: 'Không xác định' };
+                
+                deviceElement.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <span class="device-status ${device.status === 'online' ? 'status-online' : 'status-offline'}"></span>
+                        <strong>${deviceInfo.platform || 'Thiết bị không xác định'}</strong>
+                        <span class="ms-2 badge ${device.status === 'online' ? 'bg-success' : 'bg-danger'}">${device.status === 'online' ? 'Đang kết nối' : 'Đã ngắt kết nối'}</span>
+                    </div>
+                    <div class="device-info">
+                        <div>IP: ${device.ip || 'Không xác định'}</div>
+                        <div>ID: ${deviceId || 'Không xác định'}</div>
+                        <div>User Agent: ${deviceInfo.userAgent || 'Không xác định'}</div>
+                        <div>${device.status === 'online' ? 'Kết nối lúc:' : 'Ngắt kết nối lúc:'} ${new Date(device.lastSeen).toLocaleString()}</div>
+                    </div>
+                `;
+                connectedDevicesList.appendChild(deviceElement);
+            });
+        }
+
+        // Cập nhật hàm approveConnection
         function approveConnection(deviceId) {
+            console.log('Admin chấp nhận kết nối thiết bị:', deviceId);
+            
+            // Gửi sự kiện approve-connection đến server
             socket.emit('approve-connection', deviceId);
-            // Xóa yêu cầu khỏi danh sách
+            
+            // Xóa yêu cầu kết nối khỏi giao diện
             const requestElement = document.querySelector(`[data-device-id="${deviceId}"]`);
             if (requestElement) {
                 requestElement.remove();
@@ -284,6 +475,7 @@
 
         // Hàm từ chối kết nối
         function rejectConnection(deviceId) {
+            console.log('Từ chối kết nối thiết bị:', deviceId);
             socket.emit('reject-connection', deviceId);
             // Xóa yêu cầu khỏi danh sách
             const requestElement = document.querySelector(`[data-device-id="${deviceId}"]`);
@@ -329,18 +521,319 @@
             `;
         });
 
-        // Khi có client kết nối
-        socket.on('client-connected', (data) => {
-            console.log('Client đã kết nối:', data);
+        // Lưu trữ dữ liệu phiên quét
+        const scanSessions = new Map();
+
+        // Xử lý phiên quét mới
+        socket.on('new-scan-session', (sessionData) => {
+            console.log('Phiên quét mới:', sessionData);
+            const sessionId = sessionData.sessionName;
+            
+            scanSessions.set(sessionId, {
+                name: sessionData.sessionName,
+                deviceId: sessionData.deviceId,
+                deviceInfo: sessionData.deviceInfo,
+                startTime: sessionData.timestamp,
+                scans: []
+            });
+            
+            updateScanSessionsDisplay();
         });
 
-        // Xử lý dữ liệu barcode
-        socket.on('barcode-data', (barcodeData) => {
-            barcodeInput.value = barcodeData;
-            barcodeResult.textContent = `Đã nhận: ${barcodeData}`;
-            // Mở tab mới tìm kiếm Google với nội dung QR code
-            window.open('https://www.google.com/search?q=' + encodeURIComponent(barcodeData), '_blank');
+        // Xử lý dữ liệu barcode từ phiên quét
+        socket.on('barcode-data', (data) => {
+            console.log('Dữ liệu barcode nhận được:', data);
+            
+            if (!data || !data.session) {
+                console.error('Dữ liệu barcode không hợp lệ:', data);
+                return;
+            }
+            
+            const sessionId = data.session;
+            
+            // Tạo phiên mới nếu chưa tồn tại
+            if (!scanSessions.has(sessionId)) {
+                console.log('Tạo phiên mới từ dữ liệu barcode:', sessionId);
+                scanSessions.set(sessionId, {
+                    name: sessionId,
+                    deviceId: data.deviceId,
+                    deviceInfo: data.deviceInfo,
+                    startTime: data.timestamp || new Date().toISOString(),
+                    scans: []
+                });
+            }
+            
+            // Thêm dữ liệu scan vào phiên
+            if (scanSessions.has(sessionId)) {
+                const session = scanSessions.get(sessionId);
+                session.scans.push({
+                    code: data.code,
+                    timestamp: data.timestamp || new Date().toISOString(),
+                    mode: data.mode || 'Đơn lẻ',
+                    deviceId: data.deviceId
+                });
+                
+                // Cập nhật giao diện
+                updateScanSessionsDisplay();
+                
+                // Cập nhật thêm UI, hiện thông báo
+                const scanSound = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAuLi4uLi4uLi4uLi4uLi4uLi4uLjp6enp6enp6enp6enp6enp6enp6en///////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAYFf//M4wCQAAAP4AAAAAOUCCAAALjkYDAYDAYDAYDAYDAnX3e7mCgQEBAQCAgJ19/u5gIEBAQEMBdzczAmXv8MbMw3v+GNaRv+JgTcT///M4wCoAAAP4AAAAAHz8z8mBQ0MUMRUxMQgwQAwbFAUCgUCgUDrEjETEVMTEOAwEARgQAgEAgEfq4mJiYmJiYmJienp6enp6e3t7e3sABAAMlVVMy0cVE//zOMAwAAAN+AAAAABlMzLZiYm53bu7u/gYGBgZmZmZmZmZmZmAQCARDEMQ/+ZmYEBAJmAAYBAESoAyCZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZiAgOgiA//M4wD8AAfP8BgAAPvkJ+QEHSBQoCBDz83Pz8/5+fn5+djY2NmNjYwGBgMDAwArjYDAwGCgoKP66CgoKCgUFH/ygUCgUf0CgUCgUf/xUCj/4CAoKP9AQFcB//zOMBEAAK3/egAACB9+AQF//iMgUf+R//9R///I/////8j///////5H/////yP//jY2aBQKBQEBAQEBAoFAoFAQEBAQFBQUf/8UFBQUFPKBQKAgICAgAAAAAAAAAAAAAGhaD//M4wE8AAKRlTQAAACAgICAgIAAAAEBAQEChQUFH//+UFBTfwUFAQEBAQEBAQH//wEBAQEBAQMDAwMDA0NDQ0Pz8/Pz8/P7+/v////+CgoKCgoKOjo6CgYCAgICAD//zOMBXAACQAK4AAAAgICAgICAgICAgEBAQEBAQEBAQECADMzMzRMzMzJjEiBAwEDAQMBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQFQ==' );
+                scanSound.play();
+                
+                const notification = document.createElement('div');
+                notification.className = 'toast align-items-center text-white bg-success';
+                notification.setAttribute('role', 'alert');
+                notification.setAttribute('aria-live', 'assertive');
+                notification.setAttribute('aria-atomic', 'true');
+                notification.style.position = 'fixed';
+                notification.style.bottom = '20px';
+                notification.style.right = '20px';
+                notification.style.zIndex = '9999';
+                notification.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>Scan mới:</strong> ${data.code}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                document.body.appendChild(notification);
+                
+                const toast = new bootstrap.Toast(notification, { 
+                    autohide: true,
+                    delay: 3000
+                });
+                toast.show();
+                
+                notification.addEventListener('hidden.bs.toast', function () {
+                    document.body.removeChild(notification);
+                });
+            }
         });
+
+        // Cập nhật hiển thị phiên quét
+        function updateScanSessionsDisplay() {
+            const container = document.getElementById('scanSessions');
+            
+            if (!container) {
+                console.error('Không tìm thấy phần tử scanSessions');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            if (scanSessions.size === 0) {
+                container.innerHTML = '<div class="alert alert-info">Chưa có phiên scan nào</div>';
+                return;
+            }
+
+            scanSessions.forEach((session, sessionId) => {
+                // Lấy thông tin thiết bị
+                let deviceInfo = 'Không xác định';
+                if (session.deviceId && connectedDevices.has(session.deviceId)) {
+                    const device = connectedDevices.get(session.deviceId);
+                    deviceInfo = device.info?.platform || 'Không xác định';
+                } else if (session.deviceInfo) {
+                    deviceInfo = session.deviceInfo.platform || 'Không xác định';
+                }
+                
+                const sessionElement = document.createElement('div');
+                sessionElement.className = 'scan-session';
+                sessionElement.innerHTML = `
+                    <div class="scan-session-header">
+                        <div>
+                            <div class="scan-session-title">${session.name}</div>
+                            <div class="scan-session-info">
+                                Thiết bị: ${deviceInfo}<br>
+                                Bắt đầu: ${new Date(session.startTime).toLocaleString()}<br>
+                                Số lượng quét: ${session.scans.length}
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn btn-secondary btn-sm" onclick="showSessionDetail('${sessionId}')">
+                                Chi tiết
+                            </button>
+                            <button class="btn btn-success btn-sm export-btn" onclick="exportSession('${sessionId}')">
+                                Xuất Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="scan-session-data">
+                        ${session.scans.length === 0 ? 
+                            '<div class="text-center p-3">Chưa có dữ liệu scan nào</div>' :
+                            session.scans.slice(-5).map((scan, index) => `
+                                <div class="scan-item">
+                                    <span>${session.scans.length - 5 + index + 1}. ${scan.code}</span>
+                                    <small class="text-muted">${new Date(scan.timestamp).toLocaleTimeString()}</small>
+                                </div>
+                            `).join('')
+                        }
+                        ${session.scans.length > 5 ? 
+                            `<div class="text-center mt-2">
+                                <small class="text-muted">Hiển thị 5 mục mới nhất / ${session.scans.length} mục</small>
+                            </div>` : ''
+                        }
+                    </div>
+                `;
+                container.appendChild(sessionElement);
+            });
+        }
+
+        // Hiển thị chi tiết phiên quét
+        function showSessionDetail(sessionId) {
+            if (!scanSessions.has(sessionId)) return;
+            
+            const session = scanSessions.get(sessionId);
+            console.log('Hiển thị chi tiết phiên:', sessionId, session);
+            
+            // Lấy thông tin thiết bị
+            let deviceInfo = 'Không xác định';
+            if (session.deviceId && connectedDevices.has(session.deviceId)) {
+                const device = connectedDevices.get(session.deviceId);
+                deviceInfo = device.info?.platform || 'Không xác định';
+            } else if (session.deviceInfo) {
+                deviceInfo = session.deviceInfo.platform || 'Không xác định';
+            }
+            
+            // Tạo modal hiển thị chi tiết
+            const modalHtml = `
+                <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Chi tiết phiên: ${session.name}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <strong>Thời gian bắt đầu:</strong> ${new Date(session.startTime).toLocaleString()}
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Thiết bị:</strong> ${deviceInfo}
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Tổng số mã đã quét:</strong> ${session.scans.length}
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Mã QR</th>
+                                                <th>Thời gian</th>
+                                                <th>Chế độ quét</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${session.scans.length === 0 ? 
+                                                '<tr><td colspan="4" class="text-center">Chưa có dữ liệu scan nào</td></tr>' : 
+                                                session.scans.map((scan, index) => `
+                                                <tr>
+                                                    <td>${index + 1}</td>
+                                                    <td>${scan.code}</td>
+                                                    <td>${new Date(scan.timestamp).toLocaleString()}</td>
+                                                    <td>${scan.mode || 'Đơn lẻ'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-success" onclick="exportSession('${sessionId}')">Xuất Excel</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Xóa modal cũ nếu tồn tại
+            const oldModal = document.getElementById('sessionDetailModal');
+            if (oldModal) {
+                oldModal.remove();
+            }
+            
+            // Thêm modal vào body
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = modalHtml;
+            document.body.appendChild(modalContainer);
+            
+            // Hiển thị modal
+            const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
+            modal.show();
+            
+            // Xóa modal khi đóng
+            document.getElementById('sessionDetailModal').addEventListener('hidden.bs.modal', function () {
+                document.body.removeChild(modalContainer);
+            });
+        }
+
+        // Xuất dữ liệu phiên quét ra Excel
+        function exportSession(sessionId) {
+            const session = scanSessions.get(sessionId);
+            if (!session) {
+                console.error('Không tìm thấy phiên scan:', sessionId);
+                return;
+            }
+            
+            console.log('Xuất dữ liệu phiên scan:', sessionId, session);
+            
+            if (session.scans.length === 0) {
+                alert('Không có dữ liệu scan để xuất');
+                return;
+            }
+
+            try {
+                const ws = XLSX.utils.json_to_sheet(session.scans.map((scan, index) => ({
+                    'STT': index + 1,
+                    'Mã QR': scan.code,
+                    'Thời gian': new Date(scan.timestamp).toLocaleString(),
+                    'Chế độ quét': scan.mode || 'Đơn lẻ'
+                })));
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, session.name);
+                
+                const fileName = `${session.name}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                console.log('Xuất file:', fileName);
+                
+                XLSX.writeFile(wb, fileName);
+                
+                // Thông báo thành công
+                const notification = document.createElement('div');
+                notification.className = 'toast align-items-center text-white bg-primary';
+                notification.setAttribute('role', 'alert');
+                notification.setAttribute('aria-live', 'assertive');
+                notification.setAttribute('aria-atomic', 'true');
+                notification.style.position = 'fixed';
+                notification.style.bottom = '20px';
+                notification.style.right = '20px';
+                notification.style.zIndex = '9999';
+                notification.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            Đã xuất dữ liệu thành công với ${session.scans.length} mục dữ liệu
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                document.body.appendChild(notification);
+                
+                const toast = new bootstrap.Toast(notification, { 
+                    autohide: true,
+                    delay: 3000
+                });
+                toast.show();
+                
+                notification.addEventListener('hidden.bs.toast', function () {
+                    document.body.removeChild(notification);
+                });
+            } catch (error) {
+                console.error('Lỗi khi xuất Excel:', error);
+                alert('Có lỗi khi xuất dữ liệu: ' + error.message);
+            }
+        }
 
         // Quét thiết bị khi nhấn nút
         scanBtn.addEventListener('click', () => {
@@ -351,6 +844,34 @@
         // Đặt focus vào barcodeInput khi click vào ô
         barcodeInput.addEventListener('click', () => {
             barcodeInput.focus();
+        });
+
+        // Khi client gửi device-info
+        socket.on('device-info', (info) => {
+            // Lưu thông tin thiết bị vào đâu đó (ví dụ: memory, database)
+            socket.deviceInfo = info;
+            // Chờ admin duyệt, khi duyệt thì:
+            // (giả sử admin duyệt xong gọi hàm này)
+            function notifyAdminClientConnected(socket) {
+                const deviceData = {
+                    id: socket.id,
+                    info: socket.deviceInfo, // { userAgent, platform }
+                    ip: socket.handshake.address,
+                    mac: socket.mac || '', // nếu có
+                    status: 'online'
+                };
+                // Gửi tới tất cả admin
+                io.to('admin-room').emit('client-connected', deviceData);
+            }
+        });
+
+        // Xử lý xóa yêu cầu kết nối
+        socket.on('remove-connection-request', (deviceId) => {
+            console.log('Xóa yêu cầu kết nối:', deviceId);
+            const requestElement = document.querySelector(`[data-device-id="${deviceId}"]`);
+            if (requestElement) {
+                requestElement.remove();
+            }
         });
     </script>
 </body>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR11 Code Scanner - Client</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -50,6 +51,73 @@
             width: 100%;
             min-height: 300px;
         }
+        .scan-mode-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        .scan-mode-btn {
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .scan-mode-btn.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .session-group {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .new-session-btn {
+            margin-top: 10px;
+        }
+        .scan-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .scan-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .toast-success {
+            background-color: #28a745;
+        }
+        /* Hiệu ứng quét thành công */
+        .scan-success-animation {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(40, 167, 69, 0.9);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            animation: fadeInOut 1.5s ease-in-out;
+            z-index: 9999;
+            box-shadow: 0 0 20px rgba(40, 167, 69, 0.5);
+            pointer-events: none;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+        /* Thêm hiệu ứng rung cho camera khi quét thành công */
+        .qr-reader-success {
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
     </style>
 </head>
 <body>
@@ -80,20 +148,180 @@
                     <input type="text" id="serverIpInput" class="form-control" placeholder="Nhập IP server, ví dụ: 192.168.1.103">
                     <button id="connectBtn" class="btn btn-primary mt-2">Kết nối tới server</button>
                 </div>
+                <div id="scanModeContainer" style="display: none;">
+                    <div class="scan-mode-group">
+                        <button class="btn btn-outline-primary scan-mode-btn active" data-mode="single">Single Scan</button>
+                        <button class="btn btn-outline-primary scan-mode-btn" data-mode="multi">Multi Scan</button>
+                    </div>
+                    <div class="session-group">
+                        <div class="input-group mb-3">
+                            <input type="text" id="sessionName" class="form-control" placeholder="Tên phiên scan">
+                            <button class="btn btn-success" id="newSessionBtn">Tạo phiên mới</button>
+                        </div>
+                        <div id="currentSession" class="alert alert-info">
+                            Phiên hiện tại: <span id="sessionNameDisplay">Chưa có phiên</span>
+                        </div>
+                    </div>
+                    <div class="scan-list">
+                        <h6>Danh sách đã quét:</h6>
+                        <div id="scanResults"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <script>
-        // Khởi tạo Socket.io với URL của server LAN
-        const socket = io('https://quet-qr-code-lan.vercel.app', {
-            withCredentials: true,
-            transports: ['websocket', 'polling'],
-            path: '/socket.io/',
-            reconnection: true,
-            reconnectionAttempts: 5
+        // Cấu hình toastr
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            positionClass: "toast-top-right",
+            timeOut: 3000,
+            preventDuplicates: true
+        };
+
+        // Hàm hiển thị thông báo an toàn
+        function showNotification(message, type = 'success') {
+            try {
+                if (type === 'success') {
+                    toastr.success(message);
+                } else if (type === 'error') {
+                    toastr.error(message);
+                } else if (type === 'warning') {
+                    toastr.warning(message);
+                }
+            } catch (error) {
+                console.error('Lỗi khi hiển thị thông báo:', error);
+                // Fallback notification
+                alert(message);
+            }
+        }
+
+        // Xác định URL server dựa trên môi trường (local/production)
+        const serverUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? `http://${window.location.hostname}:3000` 
+            : 'https://quetqrcodelan-production.up.railway.app';
+            
+        console.log('Server URL:', serverUrl);
+        
+        let socket;
+        let isConnecting = false;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        function initializeSocket() {
+            if (socket) {
+                socket.disconnect();
+            }
+
+            socket = io(serverUrl, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 20000,
+                autoConnect: false,
+                forceNew: true,
+                path: '/socket.io/'
+            });
+
+            // Xử lý các sự kiện socket
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                isConnecting = false;
+                reconnectAttempts = 0;
+                connectionStatus.textContent = 'Đã kết nối';
+                connectionStatus.className = 'status connected';
+                showNotification('Đã kết nối đến server', 'success');
+                
+                socket.emit('device-info', {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
+                });
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+                isConnecting = false;
+                connectionStatus.textContent = 'Lỗi kết nối đến server';
+                connectionStatus.className = 'status disconnected';
+                showNotification('Lỗi kết nối đến server', 'error');
+                
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    setTimeout(() => {
+                        if (!isConnecting) {
+                            isConnecting = true;
+                            socket.connect();
+                        }
+                    }, 2000);
+                }
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('Disconnected:', reason);
+                connectionStatus.textContent = 'Mất kết nối';
+                connectionStatus.className = 'status disconnected';
+                showNotification('Mất kết nối đến server', 'warning');
+                
+                if (reason === 'io server disconnect') {
+                    setTimeout(() => {
+                        if (!isConnecting) {
+                            isConnecting = true;
+                            socket.connect();
+                        }
+                    }, 2000);
+                }
+            });
+
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                showNotification('Lỗi kết nối: ' + error.message, 'error');
+            });
+
+            socket.on('connection-approved', () => {
+                console.log('Kết nối được chấp nhận');
+                connectionStatus.textContent = 'Đã kết nối';
+                connectionStatus.className = 'status connected';
+                connectionOptions.style.display = 'none';
+                document.getElementById('scanModeContainer').style.display = 'block';
+                qrScanner.style.display = 'none';
+                document.getElementById('qr-reader').style.display = 'none';
+                document.getElementById('startCameraBtn').style.display = 'none';
+                
+                // Gửi lại thông tin thiết bị sau khi được chấp nhận
+                socket.emit('device-info', {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
+                });
+            });
+
+            socket.on('connection-rejected', () => {
+                console.log('Kết nối bị từ chối');
+                connectionStatus.textContent = 'Kết nối bị từ chối';
+                connectionStatus.className = 'status disconnected';
+                connectionOptions.style.display = 'flex';
+                qrScanner.style.display = 'none';
+                showNotification('Kết nối bị từ chối', 'error');
+            });
+        }
+
+        // Khởi tạo socket khi trang đã load
+        window.addEventListener('load', () => {
+            try {
+                initializeSocket();
+                isConnecting = true;
+                socket.connect();
+            } catch (error) {
+                console.error('Lỗi khi khởi tạo socket:', error);
+                showNotification('Không thể kết nối đến server', 'error');
+            }
         });
 
         const connectionStatus = document.getElementById('connectionStatus');
@@ -103,49 +331,33 @@
         const qrScanner = document.getElementById('qrScanner');
         let html5QrCode;
 
-        // Xử lý kết nối
-        socket.on('connect', () => {
-            console.log('Connected to server');
-            socket.emit('device-info', {
-                userAgent: navigator.userAgent,
-                platform: navigator.platform
-            });
-        });
-
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error);
-            connectionStatus.textContent = 'Lỗi kết nối đến server';
-            connectionStatus.className = 'status disconnected';
-        });
-
-        socket.on('connection-approved', () => {
-            connectionStatus.textContent = 'Đã kết nối';
-            connectionStatus.className = 'status connected';
-            connectionOptions.style.display = 'none';
-            qrScanner.style.display = 'block';
-            document.getElementById('qr-reader').style.display = 'none';
-            document.getElementById('startCameraBtn').style.display = 'block';
-        });
-
-        socket.on('connection-rejected', () => {
-            connectionStatus.textContent = 'Kết nối bị từ chối';
-            connectionStatus.className = 'status disconnected';
-            connectionOptions.style.display = 'flex';
-            qrScanner.style.display = 'none';
-        });
-
-        socket.on('disconnect', () => {
-            connectionStatus.textContent = 'Mất kết nối';
-            connectionStatus.className = 'status disconnected';
-            connectionOptions.style.display = 'flex';
-            qrScanner.style.display = 'none';
-        });
-
-        // Kết nối tự động
+        let currentScanMode = 'single';
+        let currentSession = null;
+        let scanResults = [];
+        
+        // Xử lý nút kết nối tự động
         autoConnectBtn.addEventListener('click', () => {
-            connectionStatus.textContent = 'Đang kết nối...';
-            connectionStatus.className = 'status disconnected';
-            socket.emit('request-connection');
+            if (!isConnecting) {
+                connectionStatus.textContent = 'Đang kết nối...';
+                connectionStatus.className = 'status disconnected';
+                isConnecting = true;
+                socket.emit('request-connection');
+            }
+        });
+
+        // Xử lý nút kết nối thủ công
+        document.getElementById('connectBtn').addEventListener('click', () => {
+            const serverIp = document.getElementById('serverIpInput').value.trim();
+            if (serverIp) {
+                if (!isConnecting) {
+                    connectionStatus.textContent = 'Đang kết nối...';
+                    connectionStatus.className = 'status disconnected';
+                    isConnecting = true;
+                    socket.emit('manual-connection', { serverIp });
+                }
+            } else {
+                showNotification('Vui lòng nhập địa chỉ IP server', 'warning');
+            }
         });
 
         // Quét QR để kết nối (nếu muốn dùng)
@@ -158,7 +370,12 @@
                 { facingMode: "environment" },
                 {
                     fps: 10,
-                    qrbox: { width: 250, height: 250 }
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0,
+                    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+                    showTorchButtonIfSupported: true,
+                    showZoomSliderIfSupported: true,
+                    defaultZoomValueIfSupported: 2
                 },
                 (decodedText, decodedResult) => {
                     // Gửi mã QR để xác thực kết nối
@@ -177,23 +394,168 @@
             startCamera();
         });
 
+        // Xử lý chế độ scan
+        document.querySelectorAll('.scan-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.scan-mode-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentScanMode = this.dataset.mode;
+                if (currentScanMode === 'single') {
+                    stopCamera();
+                }
+            });
+        });
+
+        // Xử lý tạo phiên mới
+        document.getElementById('newSessionBtn').addEventListener('click', () => {
+            const sessionName = document.getElementById('sessionName').value.trim();
+            if (sessionName) {
+                currentSession = sessionName;
+                document.getElementById('sessionNameDisplay').textContent = sessionName;
+                scanResults = [];
+                updateScanResults();
+                
+                // Hiển thị camera sau khi tạo phiên
+                qrScanner.style.display = 'block';
+                document.getElementById('startCameraBtn').style.display = 'block';
+                
+                // Gửi thông tin phiên mới tới admin
+                socket.emit('new-scan-session', {
+                    sessionName: sessionName,
+                    timestamp: new Date().toISOString(),
+                    deviceInfo: {
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform
+                    }
+                });
+                
+                toastr.success('Đã tạo phiên scan mới: ' + sessionName);
+            } else {
+                toastr.warning('Vui lòng nhập tên phiên scan');
+            }
+        });
+
+        function updateScanResults() {
+            const container = document.getElementById('scanResults');
+            container.innerHTML = scanResults.map((result, index) => 
+                `<div class="scan-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>${index + 1}. ${result.code}</span>
+                        <small class="text-muted">${result.timestamp}</small>
+                    </div>
+                </div>`
+            ).join('');
+        }
+
+        function stopCamera() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('qr-reader').style.display = 'none';
+                    document.getElementById('startCameraBtn').style.display = 'block';
+                });
+            }
+        }
+
+        // Cập nhật hàm startCamera để gửi dữ liệu theo phiên
         function startCamera() {
             if (!html5QrCode) {
                 html5QrCode = new Html5Qrcode("qr-reader");
             }
+            
+            if (!currentSession) {
+                showNotification('Vui lòng tạo phiên scan trước khi quét', 'warning');
+                document.getElementById('qr-reader').style.display = 'none';
+                document.getElementById('startCameraBtn').style.display = 'block';
+                return;
+            }
+            
             html5QrCode.start(
                 { facingMode: "environment" },
                 {
                     fps: 10,
-                    qrbox: { width: 250, height: 250 }
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0,
+                    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+                    showTorchButtonIfSupported: true,
+                    showZoomSliderIfSupported: true,
+                    defaultZoomValueIfSupported: 2
                 },
                 function(decodedText, decodedResult) {
-                    socket.emit('barcode-data', decodedText);
+                    console.log('QR Code đã được quét:', decodedText);
+                    
+                    // Tạo thông tin scan mới
+                    const scanData = {
+                        code: decodedText,
+                        session: currentSession,
+                        mode: currentScanMode,
+                        timestamp: new Date().toISOString(),
+                        deviceInfo: {
+                            userAgent: navigator.userAgent,
+                            platform: navigator.platform
+                        }
+                    };
+                    
+                    console.log('Đã quét mã QR:', scanData);
+                    
+                    // Gửi dữ liệu QR code về server với thông tin phiên
+                    socket.emit('barcode-data', scanData);
+
+                    // Thêm vào danh sách kết quả
+                    scanResults.push({
+                        code: decodedText,
+                        timestamp: new Date().toLocaleTimeString()
+                    });
+                    updateScanResults();
+
+                    // Hiển thị thông báo
+                    showNotification('Đã quét thành công: ' + decodedText);
+
+                    // Thêm hiệu ứng quét thành công
+                    try {
+                        console.log('Đang tạo hiệu ứng...');
+                        const successAnimation = document.createElement('div');
+                        successAnimation.className = 'scan-success-animation';
+                        successAnimation.innerHTML = `
+                            <div style="font-size: 48px; margin-bottom: 10px; color: white;">✓</div>
+                            <div style="color: white; font-size: 24px;">Quét thành công!</div>
+                        `;
+                        document.body.appendChild(successAnimation);
+                        console.log('Đã thêm hiệu ứng vào DOM');
+
+                        // Thêm hiệu ứng rung cho camera
+                        const qrReader = document.getElementById('qr-reader');
+                        if (qrReader) {
+                            qrReader.classList.add('qr-reader-success');
+                            setTimeout(() => {
+                                qrReader.classList.remove('qr-reader-success');
+                            }, 500);
+                        }
+
+                        // Xóa hiệu ứng sau khi hoàn thành
+                        setTimeout(() => {
+                            successAnimation.remove();
+                            console.log('Đã xóa hiệu ứng');
+                        }, 1500);
+                    } catch (error) {
+                        console.error('Lỗi khi tạo hiệu ứng:', error);
+                    }
+
+                    // Nếu là single scan thì dừng camera
+                    if (currentScanMode === 'single') {
+                        stopCamera();
+                    }
                 },
                 function(error) {
-                    // Có thể log hoặc hiển thị thông báo lỗi
+                    // Chỉ hiển thị lỗi nếu không phải lỗi parse thông thường
+                    if (!error.includes("No MultiFormat Readers were able to detect the code")) {
+                        console.warn('Lỗi quét:', error);
+                        showNotification('Lỗi khi quét mã QR. Vui lòng thử lại.', 'error');
+                    }
                 }
-            );
+            ).catch(error => {
+                console.error('Lỗi khi bật camera:', error);
+                showNotification('Không thể bật camera, vui lòng kiểm tra quyền truy cập và thử lại', 'error');
+            });
         }
     </script>
 </body>

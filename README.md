@@ -32,7 +32,7 @@ npm start
 
 1. Truy cập trang Admin:
 - URL: http://localhost:3000/admin.html
-- Hiển thị mã QR để kết nối
+   - Hiển thị mã QR để kết nối
 - Quản lý các thiết bị đã kết nối
 - Xem dữ liệu barcode được gửi từ các thiết bị
 
