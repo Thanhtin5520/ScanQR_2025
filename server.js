@@ -229,12 +229,14 @@ io.on('connection', (socket) => {
             deviceSessions.get(deviceId).add(barcodeData.session);
         }
         
-        // Gửi cho tất cả admin
+        // Gửi cho tất cả admin với thông tin URL tìm kiếm
         console.log('Gửi dữ liệu barcode đến admin:', scanData);
         io.emit('barcode-data', {
             ...barcodeData,
             deviceId: deviceId,
-            timestamp: scanData.timestamp
+            timestamp: scanData.timestamp,
+            searchUrl: `https://www.google.com/search?q=${encodeURIComponent(barcodeData.code)}`,
+            searchText: barcodeData.code
         });
     });
 
