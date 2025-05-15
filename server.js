@@ -21,6 +21,9 @@ const io = require('socket.io')(http, {
     perMessageDeflate: false,
     httpCompression: {
         threshold: 2048
+    },
+    allowRequest: (req, callback) => {
+        callback(null, true);
     }
 });
 const QRCode = require('qrcode');
@@ -63,7 +66,9 @@ io.on('connection', (socket) => {
     // Create QR code with the server URL
     const serverUrl = process.env.NODE_ENV === 'production' 
         ? 'https://quet-qr-code-lan.vercel.app/client.html'
-        : `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}/client.html`;
+        : socket.handshake.headers.origin 
+            ? `${socket.handshake.headers.origin}/client.html`
+            : `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}/client.html`;
     
     console.log('Server URL cho QR code:', serverUrl);
     

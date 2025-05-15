@@ -205,7 +205,7 @@
         // Xác định URL server dựa trên môi trường (local/production)
         const serverUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
             ? `http://${window.location.hostname}:3000` 
-            : 'https://quetqrcodelan-production.up.railway.app';
+            : window.location.origin;
             
         console.log('Server URL:', serverUrl);
         

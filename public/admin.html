@@ -230,19 +230,21 @@
         // Xác định URL server dựa trên môi trường (local/production)
         const serverUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
             ? `http://${window.location.hostname}:3000` 
-            : 'https://quetqrcodelan-production.up.railway.app';
+            : window.location.origin;
             
         console.log('Server URL:', serverUrl);
         
         // Tắt auto connect
         const socket = io(serverUrl, {
-            transports: ['polling', 'websocket'],
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
-            autoConnect: false
+            autoConnect: false,
+            forceNew: true,
+            path: '/socket.io/'
         });
 
         // Kết nối thủ công
@@ -275,6 +277,22 @@
                 console.log('Attempting to reconnect...');
                 socket.connect();
             }, 5000);
+        });
+
+        // Thêm xử lý reconnect
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('Reconnected after', attemptNumber, 'attempts');
+            showNotification('Đã kết nối lại với server', 'success');
+        });
+
+        socket.on('reconnect_error', (error) => {
+            console.error('Reconnection error:', error);
+            showNotification('Lỗi kết nối lại với server', 'error');
+        });
+
+        socket.on('reconnect_failed', () => {
+            console.error('Failed to reconnect');
+            showNotification('Không thể kết nối lại với server', 'error');
         });
 
         // Hiển thị QR code
